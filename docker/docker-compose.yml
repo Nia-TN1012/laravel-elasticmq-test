@@ -1,0 +1,67 @@
+version: "3"
+services:
+  # php-fpm
+  php-fpm:
+    image: laravel-php-fpm:7
+    build: ./php-fpm/
+    depends_on:
+      - mysql
+    volumes:
+      # Laravelのソースファイル
+      - ../laravel:/var/www/html
+
+  # nginx
+  nginx:
+    image: nginx:mainline-alpine
+    depends_on:
+      - php-fpm
+    ports:
+      - 80:80
+    volumes:
+      # nginxの設定ファイル
+      - ./nginx/conf/laravel.conf:/etc/nginx/conf.d/default.conf:ro
+      # Laravelのソースファイル
+      - ../laravel:/var/www/html
+      # nginxのログ
+      - ./nginx/logs:/var/log/nginx
+
+  # MySQL
+  mysql:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: password     # MySQLのrootパスワード
+      # 以下に指定したDB名やユーザーは、MySQLコンテナの新規作成時に作成されます。
+      MYSQL_DATABASE: laravel           # DB名
+      MYSQL_USER: laravel_user          # ユーザー名
+      MYSQL_PASSWORD: laravel_pass      # パスワード
+    ports:
+      - 3306:3306
+    volumes:
+      # このマウント先に入れたシェルスクリプトは、コンテナ作成後自動的に実行されます。
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+      # MySQLのデータファイル
+      - mysql-data:/var/lib/mysql
+
+  # ElasticMQ
+  elasticmq:
+    image: softwaremill/elasticmq
+    volumes:
+      # ElasticMQの設定ファイル
+      - ./elasticmq/conf/custom.conf:/opt/elasticmq.conf:ro
+
+  # `php artisan queue:work`専用コンテナ
+  queue-worker:
+    image: laravel-php-fpm:7
+    build: ./php-fpm/
+    depends_on:
+      - mysql
+    command: ["php", "artisan", "queue:work"]
+    restart: always
+    volumes:
+      # Laravelのソースファイル
+      - ../laravel:/var/www/html
+
+# データ用のボリューム
+volumes: 
+  mysql-data:
+    driver: local
